@@ -4,5 +4,6 @@ import { GenerateCommandResult, IPCPageEventData, PreviewImageResult, ProgressHa
 contextBridge.exposeInMainWorld('electron', {
   previewImage: (data: IPCPageEventData): Promise<PreviewImageResult> => ipcRenderer.invoke('page:preview', data),
   generatePDF: (data: IPCPageEventData): Promise<GenerateCommandResult> => ipcRenderer.invoke('page:start', data),
-  onProgress: (callback: (event: IpcRendererEvent, data: ProgressHandlerData) => void) => ipcRenderer.on('page:start:progress', callback),
+  cancelRequest: (): Promise<void> => ipcRenderer.invoke('page:cancel'),
+  onProgressGenerate: (callback: (event: IpcRendererEvent, data: ProgressHandlerData) => void) => ipcRenderer.on('page:start:progress', callback),
 });

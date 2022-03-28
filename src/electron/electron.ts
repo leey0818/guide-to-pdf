@@ -8,10 +8,8 @@ import { IPCPageEventData, PreviewHandlerData, PreviewImageResult, ProgressHandl
 const devWindowUrl = `http://localhost:3000`;
 const prodWindowUrl = `file://${path.join(__dirname, './index.html')}`;
 
-console.log(prodWindowUrl);
-console.log(isDev);
-
 let mainWindow: BrowserWindow | null;
+let pageToPdf: PageToPDF | null = null;
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
@@ -40,11 +38,14 @@ function createTempDir() {
 
 ipcMain.handle('page:preview', async (evt, data: IPCPageEventData): Promise<PreviewImageResult> => {
   const { pageUrl, langCode } = data;
-  if (!pageUrl || !langCode) return { success: false, data: 'Invalid parameter' };
-  if (langCode !== 'KO' && langCode !== 'EN') return { success: false, data: 'Invalid langCode' };
+  if (!pageUrl || !langCode)
+    return { success: false, data: 'Invalid parameter' };
+  if (langCode !== 'KO' && langCode !== 'EN')
+    return { success: false, data: 'Invalid langCode' };
+  if (pageToPdf)
+    return { success: false, data: 'The process is already in progress.' };
 
   const tempDir = createTempDir();
-
   console.log('Start capture preview image with ' + tempDir);
 
   try {
@@ -67,13 +68,18 @@ ipcMain.handle('page:preview', async (evt, data: IPCPageEventData): Promise<Prev
     }
   } finally {
     fs.rmSync(tempDir, { recursive: true });
+    pageToPdf = null;
   }
 });
 
 ipcMain.handle('page:start', async (evt, data: IPCPageEventData) => {
   const { pageUrl, langCode } = data;
-  if (!pageUrl || !langCode) return { success: false, data: 'Invalid parameter' };
-  if (langCode !== 'KO' && langCode !== 'EN') return { success: false, data: 'Invalid langCode' };
+  if (!pageUrl || !langCode)
+    return { success: false, data: 'Invalid parameter' };
+  if (langCode !== 'KO' && langCode !== 'EN')
+    return { success: false, data: 'Invalid langCode' };
+  if (pageToPdf)
+    return { success: false, data: 'The process is already in progress.' };
 
   const webContents = evt.sender;
   const tempDir = createTempDir();
@@ -83,7 +89,7 @@ ipcMain.handle('page:start', async (evt, data: IPCPageEventData) => {
     // create temp directory
     fs.mkdirSync(tempDir);
 
-    const pageToPdf = new PageToPDF(tempDir, pageUrl, langCode);
+    pageToPdf = new PageToPDF(tempDir, pageUrl, langCode);
     pageToPdf.setPreviewHandler((data: PreviewHandlerData) => {
       const eventData: ProgressHandlerData = {
         status: 'collect',
@@ -114,11 +120,21 @@ ipcMain.handle('page:start', async (evt, data: IPCPageEventData) => {
     }
   } finally {
     fs.rmSync(tempDir, { recursive: true });
+    pageToPdf = null;
   }
 });
 
-ipcMain.on('page:cancel', (evt) => {
-  // TODO
+ipcMain.handle('page:cancel', async (evt) => {
+  if (!pageToPdf) return;
+
+  try {
+    await pageToPdf.cancel();
+  } catch (err) {
+    console.log('Cancel error:');
+    console.log(err);
+  } finally {
+    // TODO
+  }
 });
 
 app.whenReady().then(createMainWindow);

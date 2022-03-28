@@ -11,11 +11,8 @@
     "start-renderer": "cross-env BROWSER=none yarn start",
     "start-main": "wait-on http://localhost:3000 && electron .",
     "compile-main": "tsc src/electron/*.ts --outDir build --esModuleInterop true",
-    "dev": "concurrently -n 'renderer,main' 'npm:start-renderer' 'npm:start-main'",
-    "predev": "yarn compile-main",
+    "dev": "yarn compile-main && concurrently -n 'renderer,main' 'npm:start-renderer' 'npm:start-main'",
     "dist": "electron-builder build",
-    "dist:mac": "yarn dist --mac",
-    "dist:win64": "yarn dist --win --x64",
     "predist": "yarn build && yarn compile-main"
   },
   "dependencies": {

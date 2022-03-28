@@ -10,6 +10,7 @@ function App() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
+  const [canceling, setCanceling] = useState(false);
 
   const handleChangeUrl = (evt: ChangeEvent<HTMLInputElement>) => {
     setUrl(evt.target.value);
@@ -56,7 +57,7 @@ function App() {
       const result = await window.electron.generatePDF(data);
       if (result.success) {
         setImageData('');
-        message.success(`정상적으로 생성되었습니다. 아래 경로에 저장되었습니다. ${result.data}`, 5);
+        message.success((<>정상적으로 생성되었습니다. 아래 경로에 저장되었습니다.<br/>{result.data}</>), 5);
       } else {
         message.error(result.data);
       }
@@ -66,8 +67,20 @@ function App() {
     }
   }, [url, langCode]);
 
+  const handleClickCancel = async () => {
+    if (!loading) return;
+
+    setCanceling(true);
+
+    try {
+      await window.electron.cancelRequest();
+    } finally {
+      setCanceling(false);
+    }
+  };
+
   useEffect(() => {
-    window.electron.onProgress(function (evt, data) {
+    window.electron.onProgressGenerate(function (evt, data) {
       if (data.status === 'collect') {
         setLoadingMessage(`${data.pageNo}번째 페이지 생성중...`);
         setImageData(data.pageImage);
@@ -78,9 +91,14 @@ function App() {
   }, []);
 
   return (
-    <Row justify="center" style={{ marginTop: 30 }}>
+    <Row justify="center">
       <Col xs={20}>
-        <Typography.Title level={1}>Guide to PDF</Typography.Title>
+        <Typography>
+          <Typography.Title level={1}>Guide to PDF</Typography.Title>
+          <Typography.Paragraph>
+            가이드 페이지를 PDF로 변환하는 프로그램입니다.
+          </Typography.Paragraph>
+        </Typography>
 
         <Input.Group>
           <Row gutter={8}>
@@ -112,7 +130,7 @@ function App() {
             {loading && (
               <>
                 <Spin size="small" /> {loadingMessage}
-                <Button type="link" size="small">취소</Button>
+                <Button type="link" size="small" onClick={handleClickCancel} loading={canceling}>취소</Button>
               </>
             )}
           </Col>
