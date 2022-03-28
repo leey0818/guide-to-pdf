@@ -10,7 +10,7 @@
     "test": "react-scripts test",
     "start-renderer": "cross-env BROWSER=none yarn start",
     "start-main": "wait-on http://localhost:3000 && electron .",
-    "compile-main": "tsc src/electron/*.ts --outDir build --esModuleInterop true",
+    "compile-main": "tsc",
     "dev": "yarn compile-main && concurrently -n 'renderer,main' 'npm:start-renderer' 'npm:start-main'",
     "dist": "electron-builder build",
     "predist": "yarn build && yarn compile-main"
