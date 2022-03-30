@@ -52,7 +52,7 @@ ipcMain.handle('page:preview', async (evt, data: IPCPageEventData): Promise<Prev
     // create temp directory
     fs.mkdirSync(tempDir);
 
-    const pageToPdf = new PageToPDF(tempDir, pageUrl, langCode);
+    const pageToPdf = new PageToPDF({ tempDir, pageUrl, langCode });
     const base64Image = await pageToPdf.preview();
 
     console.log('Finished capture preview image!');
@@ -89,7 +89,7 @@ ipcMain.handle('page:start', async (evt, data: IPCPageEventData) => {
     // create temp directory
     fs.mkdirSync(tempDir);
 
-    pageToPdf = new PageToPDF(tempDir, pageUrl, langCode);
+    pageToPdf = new PageToPDF({ tempDir, pageUrl, langCode });
     pageToPdf.setPreviewHandler((data: PreviewHandlerData) => {
       const eventData: ProgressHandlerData = {
         status: 'collect',

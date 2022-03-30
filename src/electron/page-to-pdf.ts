@@ -26,7 +26,7 @@ const getPageLinks = (page: puppeteer.Page) =>
     .then((links) => links.filter((link) => link.startsWith('../')));
 
 const getNextPageUrl = (pageToPdf: PageToPDF, url: string) => {
-  const startPageUrl = pageToPdf.pageUrl;
+  const startPageUrl = pageToPdf.config.pageUrl;
   const baseUrl = startPageUrl.substring(0, startPageUrl.lastIndexOf('/') + 1);
   return normalizeUrl(baseUrl + url);
 };
@@ -53,8 +53,8 @@ const newPage = async (pageToPdf: PageToPDF) => {
   await page.setViewport({ width: 1024, height: 860 });
 
   // Set JEX_LANG cookie
-  const domainName = new URL(pageToPdf.pageUrl).host;
-  await page.setCookie({ name: 'JEX_LANG', value: pageToPdf.langCd, domain: domainName });
+  const domainName = new URL(pageToPdf.config.pageUrl).host;
+  await page.setCookie({ name: 'JEX_LANG', value: pageToPdf.config.langCode, domain: domainName });
 
   return page;
 };
@@ -113,7 +113,7 @@ const createPagePDF = async (pageToPdf: PageToPDF, page: puppeteer.Page, pageNo:
   await sendPreviewImage(pageToPdf, page, pageNo);
 
   // Create page pdf
-  const pdfPath = pageToPdf.tmpDir + path.sep + `${pageNo}_${pageId}.pdf`;
+  const pdfPath = pageToPdf.config.tempDir + path.sep + `${pageNo}_${pageId}.pdf`;
   await page.emulateMediaType('screen');
   await page.pdf({
     path: pdfPath,
@@ -134,10 +134,10 @@ const createPagePDF = async (pageToPdf: PageToPDF, page: puppeteer.Page, pageNo:
 }
 
 const generatePDF = async (pageToPdf: PageToPDF) => {
-  const pageId = getPageId(pageToPdf.pageUrl);
-  const langCode = pageToPdf.langCd;
+  const pageId = getPageId(pageToPdf.config.pageUrl);
+  const langCode = pageToPdf.config.langCode;
   const fileName = `${langCode}_${pageId}.pdf`
-  const filePath = pageToPdf.tmpDir + path.sep + fileName;
+  const filePath = pageToPdf.config.tempDir + path.sep + fileName;
   await pageToPdf.pdfMerger.save(filePath);
   return { filePath, fileName };
 };
@@ -159,29 +159,34 @@ const getFirstPagePreviewImage = async (pageToPdf: PageToPDF) => {
     throw new Error('Page not initialized');
   }
 
-  await page.goto(pageToPdf.pageUrl, { waitUntil: 'networkidle2' });
+  await page.goto(pageToPdf.config.pageUrl, { waitUntil: 'networkidle2' });
   await setPageStyleBeforeProcess(page);
 
   return await getPageScreenshot(page);
 };
 
-class PageToPDF {
-  langCd: LangCode;
-  tmpDir: string;
+interface PageToPDFConfig {
+  tempDir: string;
   pageUrl: string;
+  langCode: LangCode;
+}
+
+class PageToPDF {
+  config: PageToPDFConfig;
   pageSet: Set<string> = new Set();
   pageNum: PageNumber = new PageNumber();
   pdfMerger: PDFMerger = new PDFMerger();
   prevHandler: (data: PreviewHandlerData) => void = () => {};
 
+  // user cancel requested
+  isUserCanceled: boolean = false;
+
   // page instance
   browser: puppeteer.Browser | null = null;
   page: puppeteer.Page | null = null;
 
-  constructor(tmpDir: string, pageUrl: string, langCd: LangCode) {
-    this.tmpDir = tmpDir;
-    this.pageUrl = pageUrl;
-    this.langCd = langCd;
+  constructor(config: PageToPDFConfig) {
+    this.config = config;
   }
 
   setPreviewHandler(handler: (data: PreviewHandlerData) => void) {
@@ -192,6 +197,7 @@ class PageToPDF {
     const executablePath = (puppeteer as any).executablePath().replace('app.asar', 'app.asar.unpacked');
     this.browser = await puppeteer.launch({ executablePath });
     this.page = await newPage(this);
+    this.isUserCanceled = false;
   }
 
   async preview() {
@@ -206,18 +212,33 @@ class PageToPDF {
   async start() {
     try {
       await this.init();
-      await collectPage(this, this.pageUrl);
+      await collectPage(this, this.config.pageUrl);
+    } catch (err) {
+      if (this.isUserCanceled) {
+        throw new Error('User Cancel Requested');
+      } else {
+        throw err;
+      }
     } finally {
       await this.browser?.close();
     }
   }
 
   async createPDF() {
-    return await generatePDF(this);
+    try {
+      return await generatePDF(this);
+    } catch (err) {
+      if (this.isUserCanceled) {
+        throw new Error('User Cancel Requested');
+      } else {
+        throw err;
+      }
+    }
   }
 
   async cancel() {
     if (this.page && !this.page.isClosed()) {
+      this.isUserCanceled = true;
       await this.page.close();
     }
   }
